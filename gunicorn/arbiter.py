@@ -279,7 +279,8 @@ class Arbiter:
             setup_sigterm_on_parent_death = None
         
         try:
-            mlflow.set_registry_uri("databricks-uc")
+            mlflow.set_tracking_uri("databricks-uc")
+            mlflow.set_experiment(experiment_id=os.getenv("EXP_ID"))
         except Exception as e:
             self.log.error(e)
             
