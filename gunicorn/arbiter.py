@@ -291,7 +291,6 @@ class Arbiter:
                     with open(filename, "r") as f:
                         content = f.read()
                     mlflow.log_param("scoring_server", content)
-                    log.info("=== Content of file '%s':\n%s", filename, content)
                 except Exception as e:
                     log.warning("Could not read file '%s': %s", filename, e)
                 
