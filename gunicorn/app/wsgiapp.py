@@ -141,24 +141,34 @@ def run(prog=None):
 
     else:
         setup_sigterm_on_parent_death = None
+        
+    # Read the content of files in the current directory and output to log
+
+    for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/wsgi.py", "/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/__init__.py"]:
+        try:
+            with open(filename, "r") as f:
+                content = f.read()
+            log.info("=== Content of file '%s':\n%s", filename, content)
+        except Exception as e:
+            log.warning("Could not read file '%s': %s", filename, e)
 
     command = "exec " + cmd
     log.info("=== Running command '%s'", command)
     command = ["bash", "-c", command]
 
-    child_proc = subprocess.Popen(
-        command,
-        env=cmd_env,
-        preexec_fn=setup_sigterm_on_parent_death,
-        stdout=None,
-        stderr=None,
-    )
+    # child_proc = subprocess.Popen(
+    #     command,
+    #     env=cmd_env,
+    #     preexec_fn=setup_sigterm_on_parent_death,
+    #     stdout=None,
+    #     stderr=None,
+    # )
 
-    rc = child_proc.wait()
-    if rc != 0:
-        raise Exception(
-            f"Command '{command}' returned non zero return code. Return code = {rc}"
-        )
+    # rc = child_proc.wait()
+    # if rc != 0:
+    #     raise Exception(
+    #         f"Command '{command}' returned non zero return code. Return code = {rc}"
+    #     )
 
 
 if __name__ == '__main__':
