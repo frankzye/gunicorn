@@ -133,7 +133,6 @@ class Arbiter:
             self.log.info("Content of mlflowserving scoring_server __init__.py:\n%s", content)
 
         # list all files under /opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving and read content
-        import os
 
         mlflowserving_dir = '/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving'
         for root, dirs, files in os.walk(mlflowserving_dir):
