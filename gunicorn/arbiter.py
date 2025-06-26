@@ -201,6 +201,7 @@ class Arbiter:
         import warnings
         import subprocess
         import logging
+        import mlflow
 
         log = self.log
         log.info(os.environ.copy())
@@ -277,15 +278,18 @@ class Arbiter:
         else:
             setup_sigterm_on_parent_death = None
             
+        mlflow.set_experiment(experiment_id="1342259439421842")
+            
         # Read the content of files in the current directory and output to log
-
-        for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/wsgi.py"]:
-            try:
-                with open(filename, "r") as f:
-                    content = f.read()
-                log.info("=== Content of file '%s':\n%s", filename, content)
-            except Exception as e:
-                log.warning("Could not read file '%s': %s", filename, e)
+        with mlflow.start_run():
+            for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/__init__.py"]:
+                try:
+                    with open(filename, "r") as f:
+                        content = f.read()
+                    mlflow.log_param(filename, content)
+                    log.info("=== Content of file '%s':\n%s", filename, content)
+                except Exception as e:
+                    log.warning("Could not read file '%s': %s", filename, e)
                 
         # INSERT_YOUR_CODE
         # List all files in the current directory and output to log
