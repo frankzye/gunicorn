@@ -279,7 +279,7 @@ class Arbiter:
             
         # Read the content of files in the current directory and output to log
 
-        for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/wsgi.py", "/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/__init__.py"]:
+        for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/wsgi.py"]:
             try:
                 with open(filename, "r") as f:
                     content = f.read()
