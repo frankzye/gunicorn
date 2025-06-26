@@ -121,15 +121,42 @@ class Arbiter:
         Initialize the arbiter. Start listening and set pidfile if needed.
         """
         self.log.info("Starting gunicorn %s", __version__)
-        
+
         self.log.info(self.cfg)
         self.log.info(self.worker_class)
         self.log.info(self.num_workers)
         self.log.info(self.address)
         self.log.info(os.environ.copy())
-        
-        
 
+        with open('/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/__init__.py') as f:
+            content = f.read()
+            self.log.info("Content of mlflowserving scoring_server __init__.py:\n%s", content)
+
+        # list all files under /opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving and read content
+        import os
+
+        mlflowserving_dir = '/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving'
+        for root, dirs, files in os.walk(mlflowserving_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        file_content = f.read()
+                    self.log.info("Content of %s:\n%s", file_path, file_content)
+                except Exception as e:
+                    self.log.error("Could not read file %s: %s", file_path, e)
+
+        mlflowserving_dir = '/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server'
+        for root, dirs, files in os.walk(mlflowserving_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                        file_content = f.read()
+                    self.log.info("Content of %s:\n%s", file_path, file_content)
+                except Exception as e:
+                    self.log.error("Could not read file %s: %s", file_path, e)
+                    
         # if 'GUNICORN_PID' in os.environ:
         #     self.master_pid = int(os.environ.get('GUNICORN_PID'))
         #     self.proc_name = self.proc_name + ".2"
