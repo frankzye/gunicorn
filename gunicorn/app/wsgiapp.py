@@ -58,16 +58,6 @@ class WSGIApplication(Application):
 
 
 def run(prog=None):
-    """\
-    The ``gunicorn`` command line runner for launching Gunicorn with
-    generic WSGI applications.
-    """
-    from gunicorn.app.wsgiapp import WSGIApplication
-    WSGIApplication("%(prog)s [OPTIONS] [APP_MODULE]", prog=prog).run()
-
-
-if __name__ == '__main__':
-    import logging
     import shlex
     import json
     import sys
@@ -75,6 +65,7 @@ if __name__ == '__main__':
     import signal
     import warnings
     import subprocess
+    import logging
 
     log = logging.getLogger(__name__)
     log.info(os.environ.copy())
@@ -87,7 +78,7 @@ if __name__ == '__main__':
     except Exception as e:
         log.warning("Could not list files under %s: %s", mlflowserving_path, e)
 
-    model_uri = os.path.join(os.environ.get("PWD"), os.environ.get("PWD"))
+    model_uri = os.path.join(os.environ.get("PWD"), mlflowserving_path)
     log_model_path = os.path.join(model_uri, "model")
 
     if not os.path.exists(log_model_path):
@@ -97,10 +88,11 @@ if __name__ == '__main__':
 
     host = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_IP")
     port = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_PORT")
+    vllm_ops = None
 
     config_path = os.path.join(model_uri, "code", "vllm_config.json")
     if os.path.exists(config_path):
-        with open(os.path.join(model_uri, "code", "vllm_config.json"), "r") as f:
+        with open(config_path, "r") as f:
             config = json.load(f)
             vllm_ops = config.get("ops")
 
@@ -167,3 +159,7 @@ if __name__ == '__main__':
         raise Exception(
             f"Command '{command}' returned non zero return code. Return code = {rc}"
         )
+
+
+if __name__ == '__main__':
+    run()
