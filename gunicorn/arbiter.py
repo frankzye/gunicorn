@@ -280,7 +280,6 @@ class Arbiter:
         
         try:
             mlflow.set_registry_uri("databricks-uc")
-            mlflow.set_experiment(experiment_id="1342259439421842")
         except Exception as e:
             self.log.error(e)
             
@@ -290,7 +289,7 @@ class Arbiter:
                 try:
                     with open(filename, "r") as f:
                         content = f.read()
-                    mlflow.log_param(filename, content)
+                    mlflow.log_param("scoring_server", content)
                     log.info("=== Content of file '%s':\n%s", filename, content)
                 except Exception as e:
                     log.warning("Could not read file '%s': %s", filename, e)
