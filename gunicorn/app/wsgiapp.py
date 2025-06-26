@@ -98,10 +98,11 @@ if __name__ == '__main__':
     host = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_IP")
     port = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_PORT")
 
-    with open(os.path.join(model_uri, "vllm_config.json"), "r") as f:
-        config = json.load(f)
-
-    vllm_ops = config.get("ops")
+    config_path = os.path.join(model_uri, "code", "vllm_config.json")
+    if os.path.exists(config_path):
+        with open(os.path.join(model_uri, "code", "vllm_config.json"), "r") as f:
+            config = json.load(f)
+            vllm_ops = config.get("ops")
 
     args = []
     if host:
