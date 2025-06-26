@@ -122,65 +122,48 @@ class Arbiter:
         """
         self.log.info("Starting gunicorn %s", __version__)
 
-        self.log.info(self.cfg)
-        self.log.info(self.worker_class)
-        self.log.info(self.num_workers)
-        self.log.info(self.address)
-        self.log.info(os.environ.copy())
-        self.log.info("Current working directory: %s", os.getcwd())
+        if 'GUNICORN_PID' in os.environ:
+            self.master_pid = int(os.environ.get('GUNICORN_PID'))
+            self.proc_name = self.proc_name + ".2"
+            self.master_name = "Master.2"
 
-        mlflowserving_path = os.environ.get("MODEL_PATH")
-        try:
-            file_names = os.listdir(mlflowserving_path)
-            self.log.info("Files under %s: %s", mlflowserving_path, file_names)
-        except Exception as e:
-            self.log.warning("Could not list files under %s: %s", mlflowserving_path, e)
+        self.pid = os.getpid()
+        if self.cfg.pidfile is not None:
+            pidname = self.cfg.pidfile
+            if self.master_pid != 0:
+                pidname += ".2"
+            self.pidfile = Pidfile(pidname)
+            self.pidfile.create(self.pid)
+        self.cfg.on_starting(self)
 
-        # list all files under /opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving and read content
+        self.init_signals()
 
-                    
-        # if 'GUNICORN_PID' in os.environ:
-        #     self.master_pid = int(os.environ.get('GUNICORN_PID'))
-        #     self.proc_name = self.proc_name + ".2"
-        #     self.master_name = "Master.2"
+        if not self.LISTENERS:
+            fds = None
+            listen_fds = systemd.listen_fds()
+            if listen_fds:
+                self.systemd = True
+                fds = range(systemd.SD_LISTEN_FDS_START,
+                            systemd.SD_LISTEN_FDS_START + listen_fds)
 
-        # self.pid = os.getpid()
-        # if self.cfg.pidfile is not None:
-        #     pidname = self.cfg.pidfile
-        #     if self.master_pid != 0:
-        #         pidname += ".2"
-        #     self.pidfile = Pidfile(pidname)
-        #     self.pidfile.create(self.pid)
-        # self.cfg.on_starting(self)
+            elif self.master_pid:
+                fds = []
+                for fd in os.environ.pop('GUNICORN_FD').split(','):
+                    fds.append(int(fd))
 
-        # self.init_signals()
+            self.LISTENERS = sock.create_sockets(self.cfg, self.log, fds)
 
-        # if not self.LISTENERS:
-        #     fds = None
-        #     listen_fds = systemd.listen_fds()
-        #     if listen_fds:
-        #         self.systemd = True
-        #         fds = range(systemd.SD_LISTEN_FDS_START,
-        #                     systemd.SD_LISTEN_FDS_START + listen_fds)
+        listeners_str = ",".join([str(lnr) for lnr in self.LISTENERS])
+        self.log.debug("Arbiter booted")
+        self.log.info("Listening at: %s (%s)", listeners_str, self.pid)
+        self.log.info("Using worker: %s", self.cfg.worker_class_str)
+        systemd.sd_notify("READY=1\nSTATUS=Gunicorn arbiter booted", self.log)
 
-        #     elif self.master_pid:
-        #         fds = []
-        #         for fd in os.environ.pop('GUNICORN_FD').split(','):
-        #             fds.append(int(fd))
+        # check worker class requirements
+        if hasattr(self.worker_class, "check_config"):
+            self.worker_class.check_config(self.cfg, self.log)
 
-        #     self.LISTENERS = sock.create_sockets(self.cfg, self.log, fds)
-
-        # listeners_str = ",".join([str(lnr) for lnr in self.LISTENERS])
-        # self.log.debug("Arbiter booted")
-        # self.log.info("Listening at: %s (%s)", listeners_str, self.pid)
-        # self.log.info("Using worker: %s", self.cfg.worker_class_str)
-        # systemd.sd_notify("READY=1\nSTATUS=Gunicorn arbiter booted", self.log)
-
-        # # check worker class requirements
-        # if hasattr(self.worker_class, "check_config"):
-        #     self.worker_class.check_config(self.cfg, self.log)
-
-        # self.cfg.when_ready(self)
+        self.cfg.when_ready(self)
 
     def init_signals(self):
         """\

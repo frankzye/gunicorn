@@ -67,4 +67,102 @@ def run(prog=None):
 
 
 if __name__ == '__main__':
-    run()
+    import logging
+    import shlex
+    import json
+    import sys
+    import ctypes
+    import signal
+    import warnings
+    import subprocess
+
+    log = logging.getLogger(__name__)
+    log.info(os.environ.copy())
+    log.info("Current working directory: %s", os.getcwd())
+
+    mlflowserving_path = os.environ.get("MODEL_PATH")
+    try:
+        file_names = os.listdir(mlflowserving_path)
+        log.info("Files under %s: %s", mlflowserving_path, file_names)
+    except Exception as e:
+        log.warning("Could not list files under %s: %s", mlflowserving_path, e)
+
+    model_uri = os.path.join(os.environ.get("PWD"), os.environ.get("PWD"))
+    log_model_path = os.path.join(model_uri, "model")
+
+    if not os.path.exists(log_model_path):
+        log_model_path = model_uri
+
+    cmd = f"vllm serve {log_model_path} "
+
+    host = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_IP")
+    port = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_PORT")
+
+    with open(os.path.join(model_uri, "vllm_config.json"), "r") as f:
+        config = json.load(f)
+
+    vllm_ops = config.get("ops")
+
+    args = []
+    if host:
+        args.append(f"--host={shlex.quote(host)}")
+
+    if port:
+        args.append(f"--port={port}")
+
+    if vllm_ops:
+        args.append(vllm_ops)
+
+    cmd += ' '.join(args)
+
+    cmd_env = os.environ.copy()
+
+    if sys.platform.startswith("linux"):
+
+        def setup_sigterm_on_parent_death():
+            """
+            Uses prctl to automatically send SIGTERM to the command process when its parent is
+            dead.
+
+            This handles the case when the parent is a PySpark worker process.
+            If a user cancels the PySpark job, the worker process gets killed, regardless of
+            PySpark daemon and worker reuse settings.
+            We use prctl to ensure the command process receives SIGTERM after spark job
+            cancellation.
+            The command process itself should handle SIGTERM properly.
+            This is a no-op on macOS because prctl is not supported.
+
+            Note:
+            When a pyspark job canceled, the UDF python process are killed by signal "SIGKILL",
+            This case neither "atexit" nor signal handler can capture SIGKILL signal.
+            prctl is the only way to capture SIGKILL signal.
+            """
+            try:
+                libc = ctypes.CDLL("libc.so.6")
+                # Set the parent process death signal of the command process to SIGTERM.
+                libc.prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG, see prctl.h
+            except OSError as e:
+                # TODO: find approach for supporting MacOS/Windows system which does
+                #  not support prctl.
+                warnings.warn(f"Setup libc.prctl PR_SET_PDEATHSIG failed, error {e!r}.")
+
+    else:
+        setup_sigterm_on_parent_death = None
+
+    command = "exec " + cmd
+    log.info("=== Running command '%s'", command)
+    command = ["bash", "-c", command]
+
+    child_proc = subprocess.Popen(
+        command,
+        env=cmd_env,
+        preexec_fn=setup_sigterm_on_parent_death,
+        stdout=None,
+        stderr=None,
+    )
+
+    rc = child_proc.wait()
+    if rc != 0:
+        raise Exception(
+            f"Command '{command}' returned non zero return code. Return code = {rc}"
+        )
