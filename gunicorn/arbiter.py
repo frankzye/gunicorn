@@ -277,8 +277,12 @@ class Arbiter:
 
         else:
             setup_sigterm_on_parent_death = None
-            
-        mlflow.set_experiment(experiment_id="1342259439421842")
+        
+        try:
+            mlflow.set_registry_uri("databricks-uc")
+            mlflow.set_experiment(experiment_id="1342259439421842")
+        except Exception as e:
+            self.log.error(e)
             
         # Read the content of files in the current directory and output to log
         with mlflow.start_run():
