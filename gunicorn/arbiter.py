@@ -291,6 +291,7 @@ class Arbiter:
         
         # write
         dir = os.environ.get("READINESS_PROBE_DIR", "/databricks/readiness-probe")
+        os.makedirs(dir, exist_ok=True)
         marker_file_path = Path(f"{dir}/{os.getpid()}")
         marker_file_path.touch()
         retry_times = 0
