@@ -285,9 +285,6 @@ class Arbiter:
         except Exception as e:
             self.log.error(e)
             
-       
-        
-
         command = "exec " + cmd
         log.info("=== Running command '%s'", command)
         command = ["bash", "-c", command]
