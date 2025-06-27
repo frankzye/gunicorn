@@ -202,6 +202,7 @@ class Arbiter:
         import subprocess
         import logging
         import mlflow
+        from pathlib import Path
 
         log = self.log
         log.info(os.environ.copy())
@@ -284,41 +285,40 @@ class Arbiter:
         except Exception as e:
             self.log.error(e)
             
-        # Read the content of files in the current directory and output to log
-        with mlflow.start_run():
-            for filename in ["/opt/conda/envs/mlflow-env/lib/python3.12/site-packages/mlflowserving/scoring_server/__init__.py"]:
-                try:
-                    with open(filename, "r") as f:
-                        content = f.read()
-                    mlflow.log_param("scoring_server", content)
-                except Exception as e:
-                    log.warning("Could not read file '%s': %s", filename, e)
-                
-        # INSERT_YOUR_CODE
-        # List all files in the current directory and output to log
-        try:
-            files_in_cwd = os.listdir("/")
-            log.info("Files in current directory (%s): %s", os.getcwd(), files_in_cwd)
-        except Exception as e:
-            log.warning("Could not list files in current directory: %s", e)
+       
+        
 
         command = "exec " + cmd
         log.info("=== Running command '%s'", command)
         command = ["bash", "-c", command]
 
-        # child_proc = subprocess.Popen(
-        #     command,
-        #     env=cmd_env,
-        #     preexec_fn=setup_sigterm_on_parent_death,
-        #     stdout=None,
-        #     stderr=None,
-        # )
+        child_proc = subprocess.Popen(
+            command,
+            env=cmd_env,
+            preexec_fn=setup_sigterm_on_parent_death,
+            stdout=None,
+            stderr=None,
+        )
+        
+        # write
+        dir = os.environ.get("READINESS_PROBE_DIR", "/databricks/readiness-probe")
+        marker_file_path = Path(f"{dir}/{os.getpgid()}")
+        marker_file_path.touch()
+        retry_times = 0
+        
+        while not marker_file_path.exists() and retry_times < 1000:
+            marker_file_path.touch()
+            time.sleep(1)
+            retry_times += 1
+        
+        if not marker_file_path.exists():
+            raise Exception("fail to mark ready")
 
-        # rc = child_proc.wait()
-        # if rc != 0:
-        #     raise Exception(
-        #         f"Command '{command}' returned non zero return code. Return code = {rc}"
-        #     )
+        rc = child_proc.wait()
+        if rc != 0:
+            raise Exception(
+                f"Command '{command}' returned non zero return code. Return code = {rc}"
+            )
         
 
     def handle_chld(self, sig, frame):
