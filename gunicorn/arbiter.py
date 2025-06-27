@@ -200,8 +200,6 @@ class Arbiter:
         import signal
         import warnings
         import subprocess
-        import logging
-        import mlflow
         from pathlib import Path
 
         log = self.log
@@ -279,12 +277,6 @@ class Arbiter:
         else:
             setup_sigterm_on_parent_death = None
         
-        try:
-            mlflow.set_tracking_uri("databricks")
-            mlflow.set_experiment(experiment_id=os.getenv("EXP_ID"))
-        except Exception as e:
-            self.log.error(e)
-            
         command = "exec " + cmd
         log.info("=== Running command '%s'", command)
         command = ["bash", "-c", command]
@@ -299,7 +291,7 @@ class Arbiter:
         
         # write
         dir = os.environ.get("READINESS_PROBE_DIR", "/databricks/readiness-probe")
-        marker_file_path = Path(f"{dir}/{os.getpgid()}")
+        marker_file_path = Path(f"{dir}/{os.getpid()}")
         marker_file_path.touch()
         retry_times = 0
         
