@@ -214,7 +214,7 @@ class Arbiter:
             log.warning("Could not list files under %s: %s", mlflowserving_path, e)
 
         model_uri = os.path.join(os.environ.get("PWD"), mlflowserving_path)
-        log_model_path = os.path.join(model_uri, "model")
+        log_model_path = os.path.join(model_uri, os.environ.get("MODEL_ARTIFACT_PATH", "model"))
 
         if not os.path.exists(log_model_path):
             log_model_path = model_uri
