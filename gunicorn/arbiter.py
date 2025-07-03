@@ -223,13 +223,7 @@ class Arbiter:
 
         host = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_IP")
         port = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_PORT")
-        vllm_ops = None
-
-        config_path = os.path.join(model_uri, "code", "vllm_config.json")
-        if os.path.exists(config_path):
-            with open(config_path, "r") as f:
-                config = json.load(f)
-                vllm_ops = config.get("ops")
+        vllm_ops = os.environ.get("VLLM_OPS")
 
         args = []
         if host:
@@ -245,38 +239,6 @@ class Arbiter:
 
         cmd_env = os.environ.copy()
 
-        if sys.platform.startswith("linux"):
-
-            def setup_sigterm_on_parent_death():
-                """
-                Uses prctl to automatically send SIGTERM to the command process when its parent is
-                dead.
-
-                This handles the case when the parent is a PySpark worker process.
-                If a user cancels the PySpark job, the worker process gets killed, regardless of
-                PySpark daemon and worker reuse settings.
-                We use prctl to ensure the command process receives SIGTERM after spark job
-                cancellation.
-                The command process itself should handle SIGTERM properly.
-                This is a no-op on macOS because prctl is not supported.
-
-                Note:
-                When a pyspark job canceled, the UDF python process are killed by signal "SIGKILL",
-                This case neither "atexit" nor signal handler can capture SIGKILL signal.
-                prctl is the only way to capture SIGKILL signal.
-                """
-                try:
-                    libc = ctypes.CDLL("libc.so.6")
-                    # Set the parent process death signal of the command process to SIGTERM.
-                    libc.prctl(1, signal.SIGTERM)  # PR_SET_PDEATHSIG, see prctl.h
-                except OSError as e:
-                    # TODO: find approach for supporting MacOS/Windows system which does
-                    #  not support prctl.
-                    warnings.warn(f"Setup libc.prctl PR_SET_PDEATHSIG failed, error {e!r}.")
-
-        else:
-            setup_sigterm_on_parent_death = None
-        
         command = "exec " + cmd
         log.info("=== Running command '%s'", command)
         command = ["bash", "-c", command]
@@ -284,23 +246,22 @@ class Arbiter:
         child_proc = subprocess.Popen(
             command,
             env=cmd_env,
-            preexec_fn=setup_sigterm_on_parent_death,
             stdout=None,
             stderr=None,
         )
-        
+
         # write
         dir = os.environ.get("READINESS_PROBE_DIR", "/databricks/readiness-probe")
         os.makedirs(dir, exist_ok=True)
         marker_file_path = Path(f"{dir}/{os.getpid()}")
         marker_file_path.touch()
         retry_times = 0
-        
+
         while not marker_file_path.exists() and retry_times < 1000:
             marker_file_path.touch()
             time.sleep(1)
             retry_times += 1
-        
+
         if not marker_file_path.exists():
             raise Exception("fail to mark ready")
 
@@ -309,7 +270,6 @@ class Arbiter:
             raise Exception(
                 f"Command '{command}' returned non zero return code. Return code = {rc}"
             )
-        
 
     def handle_chld(self, sig, frame):
         "SIGCHLD handling"
