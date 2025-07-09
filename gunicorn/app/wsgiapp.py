@@ -32,6 +32,7 @@ class WSGIApplication(Application):
 
         if len(args) > 0:
             self.cfg.set("default_proc_name", args[0])
+            self.cfg.set("bind", [f'0.0.0.0:{os.getenv("GUNICORN_EXTRA_PORT", 8001)}'])
             self.cfg.set("worker_class", "uvicorn.workers.UvicornWorker")
             self.app_uri = os.environ.get("GUNICORN_EXTRA_APP", args[0])
 
