@@ -102,7 +102,7 @@ async def ready(raw_request: Request) -> Response:
     return Response(status_code=200, content="\n")
 
 
-@router.api_route("/invocations")
+@router.api_route("/invocations", methods=["POST"])
 async def invocations(raw_request: Request) -> Response:
     timeout = os.environ.get("REQUEST_TIMEOUT", 6000)
     url = f'http://localhost:{os.environ.get("GUNICORN_EXTRA_PORT", 8001)}/invocations'
