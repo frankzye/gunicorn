@@ -1,11 +1,13 @@
 import os
 import time
+import httpx
 from logging import getLogger
 from pathlib import Path
 from fastapi import FastAPI, APIRouter, Request, Response
 import shlex
 import subprocess
 import signal
+from starlette.responses import StreamingResponse
 
 log = getLogger(__name__)
 
@@ -27,7 +29,7 @@ def run():
     cmd = f"vllm serve {log_model_path} "
 
     host = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_IP")
-    port = os.environ.get("MODEL_SERVING_CONTAINER_EXPOSED_PORT")
+    port = os.environ.get("GUNICORN_EXTRA_PORT", 8001)
     vllm_ops = os.environ.get("VLLM_OPS")
 
     args = []
@@ -98,6 +100,41 @@ async def live(raw_request: Request) -> Response:
 async def ready(raw_request: Request) -> Response:
     """Ping check. Endpoint required for SageMaker"""
     return Response(status_code=200, content="\n")
+
+
+@router.api_route("/invocations")
+async def ready(raw_request: Request) -> Response:
+    timeout = os.environ.get("REQUEST_TIMEOUT", 6000)
+    url = f'http://localhost:{os.environ.get("GUNICORN_EXTRA_PORT", 8001)}/invocations'
+    payload = {}
+    content_type = raw_request.headers.get("content-type")
+    headers = {
+        "Content-Type": content_type
+    }
+    if content_type == "application/json":
+        payload = await raw_request.json()
+
+    try:
+        if payload.get("stream", "false") == "true":
+            async def stream_response():
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream("POST", url, headers=headers, content=payload) as response:
+                        if response.status_code != 200:
+                            response_text = await response.aread()
+                            raise Exception(response_text)
+
+                        async for chunk in response.aiter_bytes():
+                            if chunk:
+                                yield chunk
+
+            return StreamingResponse(stream_response(), status_code=200, media_type="text/event-stream;charset=UTF-8")
+
+        else:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                res = await client.post(url, headers=headers, content=await raw_request.body())
+                return Response(status_code=res.status_code, headers=res.headers, content=res.content)
+    except Exception as e:
+        return Response(status_code=500, content=str(e))
 
 app.include_router(router)
 

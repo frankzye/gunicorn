@@ -37,8 +37,6 @@ class WSGIApplication(Application):
 
     def load_config(self):
         super().load_config()
-
-        self.cfg.set("bind", [f'0.0.0.0:{os.getenv("GUNICORN_EXTRA_PORT", 8001)}'])
         
         if self.app_uri is None:
             if self.cfg.wsgi_app is not None:
