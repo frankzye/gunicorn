@@ -125,7 +125,7 @@ def invocations():
                         for chunk in response.iter_bytes():
                             yield chunk
 
-            return flask.Response(stream_response(), status_code=200, media_type="text/event-stream;charset=UTF-8")
+            return flask.Response(stream_response(), status=200, media_type="text/event-stream;charset=UTF-8")
 
         else:
             with httpx.Client(timeout=timeout) as client:
