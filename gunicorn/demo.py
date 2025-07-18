@@ -3,11 +3,11 @@ import time
 import httpx
 from logging import getLogger
 from pathlib import Path
-from fastapi import FastAPI, APIRouter, Request, Response
+import flask
 import shlex
 import subprocess
 import signal
-from starlette.responses import StreamingResponse
+from concurrent.futures import ThreadPoolExecutor
 
 log = getLogger(__name__)
 
@@ -66,77 +66,74 @@ def run():
                 child_proc.kill()
 
     signal.signal(signal.SIGTERM, _terminate)
+    child_proc.wait()
+    
+readness_pool = ThreadPoolExecutor(1)
+readness_pool.submit(run)
+
+signal.signal(signal.SIGTERM, lambda signum, frame: readness_pool.shutdown(wait=False))
 
 
-async def lifespan(context):
-    run()
-    yield
-    log.info("shuted down!")
+app = flask.Flask(__name__)
 
-
-app = FastAPI(lifespan=lifespan)
-
-router = APIRouter()
 
 
 @app.get("/")
-async def root():
+def root():
     return {"message": ""}
 
 
-@router.api_route("/ping", methods=["GET", "POST"])
-async def ping(raw_request: Request) -> Response:
+@app.route("/ping", methods=["GET", "POST"])
+def ping():
     """Ping check. Endpoint required for SageMaker"""
-    return Response(status_code=200, content="\n")
+    return flask.Response(status=200, response="\n", mimetype="application/json")
 
 
-@router.api_route("/v2/health/live")
-async def live(raw_request: Request) -> Response:
+@app.route("/v2/health/live")
+def live():
     """Ping check. Endpoint required for SageMaker"""
-    return Response(status_code=200, content="\n")
+    return flask.Response(status=200, response="\n", mimetype="application/json")
 
 
-@router.api_route("/v2/health/ready")
-async def ready(raw_request: Request) -> Response:
+@app.route("/v2/health/ready")
+def ready():
     """Ping check. Endpoint required for SageMaker"""
-    return Response(status_code=200, content="\n")
+    return flask.Response(status=200, response="\n", mimetype="application/json")
 
 
-@router.api_route("/invocations", methods=["POST"])
-async def invocations(raw_request: Request) -> Response:
+@app.route("/v1/chat/completions", methods=["POST"])
+@app.route("/invocations", methods=["POST"])
+def invocations():
+    raw_request = flask.request
     timeout = os.environ.get("REQUEST_TIMEOUT", 6000)
     url = f'http://localhost:{os.environ.get("GUNICORN_EXTRA_PORT", 8001)}/invocations'
     payload = {}
-    content_type = raw_request.headers.get("content-type")
+    content_type = raw_request.content_type
     headers = {
         "Content-Type": content_type
     }
-    if content_type == "application/json":
-        payload = await raw_request.json()
+    if raw_request.is_json:
+        payload = raw_request.json
 
     try:
-        if payload.get("stream", "false") == "true":
-            async def stream_response():
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    async with client.stream("POST", url, headers=headers, content=payload) as response:
-                        if response.status_code != 200:
-                            response_text = await response.aread()
-                            raise Exception(response_text)
+        if str(payload.get("stream", "false")).lower() == "true":
+            
+            @flask.stream_with_context
+            def stream_response():
+                with httpx.Client(timeout=timeout) as client:
+                    with client.stream("POST", url, headers=headers, content=payload) as response:
+                        for chunk in response.iter_bytes():
+                            yield chunk
 
-                        async for chunk in response.aiter_bytes():
-                            if chunk:
-                                yield chunk
-
-            return StreamingResponse(stream_response(), status_code=200, media_type="text/event-stream;charset=UTF-8")
+            return flask.Response(stream_response(), status_code=200, media_type="text/event-stream;charset=UTF-8")
 
         else:
-            async with httpx.AsyncClient(timeout=timeout) as client:
-                res = await client.post(url, headers=headers, content=await raw_request.body())
-                return Response(status_code=res.status_code, headers=res.headers, content=res.content)
+            with httpx.Client(timeout=timeout) as client:
+                res = client.post(url, headers=headers, content=raw_request.get_data())
+                return flask.Response(status=res.status_code, headers=res.headers, response=res.content)
     except Exception as e:
-        return Response(status_code=500, content=str(e))
+        return flask.Response(status=500, response=str(e))
 
-app.include_router(router)
 
 # write
 dir = os.environ.get("READINESS_PROBE_DIR", "/databricks/readiness-probe")

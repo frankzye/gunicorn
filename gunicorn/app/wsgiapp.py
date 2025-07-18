@@ -32,7 +32,6 @@ class WSGIApplication(Application):
 
         if len(args) > 0:
             self.cfg.set("default_proc_name", args[0])
-            self.cfg.set("worker_class", "uvicorn.workers.UvicornWorker")
             self.app_uri = os.environ.get("GUNICORN_EXTRA_APP", args[0])
 
     def load_config(self):
