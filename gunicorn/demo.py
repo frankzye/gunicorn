@@ -121,7 +121,7 @@ def invocations():
             @flask.stream_with_context
             def stream_response():
                 with httpx.Client(timeout=timeout) as client:
-                    with client.stream("POST", url, headers=headers, content=payload) as response:
+                    with client.stream("POST", url, headers=headers, json=payload) as response:
                         for chunk in response.iter_bytes():
                             yield chunk
 
